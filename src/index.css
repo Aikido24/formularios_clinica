@@ -1,0 +1,4 @@
+/* Clinica layout owns body/html via clinicausuarios.css. Mount only. */
+#root {
+  min-height: 100vh;
+}

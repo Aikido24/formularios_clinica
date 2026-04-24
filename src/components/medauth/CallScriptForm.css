@@ -1,0 +1,241 @@
+/* Green clinical call / verification worksheet */
+.cs-form {
+  --cs-green: #1b5e20;
+  --cs-green-soft: #2e7d32;
+  --cs-paper: #e8f5e9;
+  --cs-paper2: #f1f8e9;
+  --cs-border: #a5d6a7;
+  --cs-ink: #1b2e1b;
+  background: linear-gradient(180deg, var(--cs-paper) 0%, var(--cs-paper2) 100%);
+  border: 2px solid var(--cs-border);
+  border-radius: 6px;
+  color: var(--cs-ink);
+  padding: 16px 14px 20px;
+  margin-bottom: 20px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.cs-form * {
+  box-sizing: border-box;
+}
+
+.cs-form h2 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cs-green);
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--cs-green-soft);
+}
+
+.cs-top-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 18px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .cs-top-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cs-static-ref {
+  font-size: 11px;
+  line-height: 1.5;
+  color: #2e4a2e;
+  font-family: ui-monospace, monospace;
+}
+
+.cs-static-ref ul {
+  margin: 6px 0 0 16px;
+  padding: 0;
+}
+
+.cs-field label,
+.cs-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #336834;
+  margin-bottom: 3px;
+}
+
+.cs-field input[type='text'],
+.cs-field input[type='tel'],
+.cs-field input[type='date'],
+.cs-field select,
+.cs-field textarea {
+  width: 100%;
+  border: 1px solid rgba(27, 94, 32, 0.35);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: #fff;
+  color: var(--cs-ink);
+}
+
+.cs-field textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.cs-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+@media (max-width: 560px) {
+  .cs-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cs-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .cs-row-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.cs-ins-level {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  margin: 10px 0 12px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+}
+
+.cs-ins-level label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cs-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(27, 94, 32, 0.35);
+}
+
+.cs-section-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cs-green);
+  margin-bottom: 10px;
+}
+
+.cs-benefits-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .cs-benefits-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.cs-yn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 8px;
+}
+
+.cs-yn-row > span:first-child {
+  flex: 1;
+  min-width: 140px;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.cs-yn-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cs-box {
+  border: 2px solid var(--cs-green-soft);
+  border-radius: 4px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  margin-bottom: 8px;
+}
+
+.cs-box-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cs-green);
+  margin-bottom: 8px;
+}
+
+.cs-codes {
+  font-size: 10px;
+  color: #444;
+  margin: 6px 0 0;
+  line-height: 1.45;
+}
+
+.cs-net-block {
+  border: 1px solid var(--cs-border);
+  border-radius: 4px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.cs-net-block h4 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--cs-green-soft);
+}
+
+.cs-subgrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 560px) {
+  .cs-subgrid {
+    grid-template-columns: 1fr;
+  }
+}
