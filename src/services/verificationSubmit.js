@@ -1,8 +1,7 @@
 import { httpsCallable } from 'firebase/functions'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { collection, addDoc } from 'firebase/firestore'
 
-import { db, ensureCallableAuth, functions, getStorageInstances } from '../firebase.js'
+import { ensureCallableAuth, functions, getStorageInstances } from '../firebase.js'
 import { DEFAULT_REPORT_EMAIL } from '../medauthForm.js'
 
 /**
@@ -413,12 +412,7 @@ export async function submitVerificationFlow({ frontFile, backFile, data, onStat
     resultado: evaluar(data),
   }
 
-  onStatus?.('Saving record...')
-  const docRef = await addDoc(
-    collection(db, 'pacientes'),
-    Object.fromEntries(Object.entries(full).filter(([k]) => !k.startsWith('b64'))),
-  )
-  full.expedienteId = docRef.id
+  full.expedienteId = crypto.randomUUID()
 
   onStatus?.('Sending report by cloud function...')
   const subject = `MedAuth Pro — ${full.nombre || 'Patient'} — Insurance verification`

@@ -1,4 +1,4 @@
-/** Patient intake form (paper INTAKE) — serializable for Firestore / reports. */
+/** Patient intake form (paper INTAKE) — serializable for reports. */
 
 export function createEmptyIntakeForm() {
   return {

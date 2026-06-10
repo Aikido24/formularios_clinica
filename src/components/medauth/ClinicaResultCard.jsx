@@ -40,7 +40,7 @@ export function ClinicaResultCard({ data, onReset }) {
         <span className="material-symbols-outlined">check_circle</span> Report sent
       </div>
       <p className="result-message">
-        Verification report for <strong>{data.nombre || 'Patient'}</strong> was saved and emailed to{' '}
+        Verification report for <strong>{data.nombre || 'Patient'}</strong> was emailed to{' '}
         <strong>{getReportDestEmail()}</strong>.
       </p>
 

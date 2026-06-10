@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Site password gate (testing only) — read-only from the client.
+    match /user/password {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // No patient or other data in Firestore from this app.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
