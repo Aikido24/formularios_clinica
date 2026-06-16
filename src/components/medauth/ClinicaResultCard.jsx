@@ -30,6 +30,7 @@ export function ClinicaResultCard({ data, onReset }) {
       auth.includes('Obtenida') ||
       auth.includes('Not required') ||
       auth.includes('No Requerida'))
+  const worksheetMode = Boolean(data.worksheetPdfSent)
 
   return (
     <div className="section-card result-card result-apto">
@@ -37,11 +38,12 @@ export function ClinicaResultCard({ data, onReset }) {
         <span className="material-symbols-outlined">mark_email_read</span>
       </div>
       <div className="result-badge">
-        <span className="material-symbols-outlined">check_circle</span> Report sent
+        <span className="material-symbols-outlined">check_circle</span>{' '}
+        {worksheetMode ? 'Worksheet PDF sent' : 'Report sent'}
       </div>
       <p className="result-message">
-        Verification report for <strong>{data.nombre || 'Patient'}</strong> was emailed to{' '}
-        <strong>{getReportDestEmail()}</strong>.
+        {worksheetMode ? 'Worksheet PDF for ' : 'Verification report for '}
+        <strong>{data.nombre || 'Patient'}</strong> was emailed to <strong>{getReportDestEmail()}</strong>.
       </p>
 
       {(pickCardImageSrc(data.b64Front, data.urlFrente) || pickCardImageSrc(data.b64Back, data.urlReverso)) && (
@@ -166,31 +168,42 @@ export function ClinicaResultCard({ data, onReset }) {
             margin: '14px 0 8px',
           }}
         >
-          Verification call results
+          {!worksheetMode ? 'Verification call results' : 'Worksheet summary'}
         </p>
-        <div className="summary-row">
-          <span className="summary-key">Covered?</span>
-          {chip(data.cobertura, ['Yes', 'Partial', 'Si', 'Parcial'].includes(data.cobertura))}
-        </div>
-        <div className="summary-row">
-          <span className="summary-key">Prior authorization</span>
-          {chip(data.autorizacion, authChipOk)}
-        </div>
-        {row('Deductible (call)', data.deducibleTotal)}
-        {row('Deductible met', data.deducibleMet)}
-        {row('Copay/Coinsurance (call)', data.copago)}
-        {row('Out-of-pocket max.', data.oopMax)}
-        {row('Insurance Rep', data.repName)}
-        {row('Reference #', data.refNum)}
-        {data.notasRep ? (
-          <div className="summary-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-            <span className="summary-key">Additional notes</span>
-            <span className="summary-val" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              {data.notasRep}
-            </span>
-          </div>
-        ) : null}
-        {row('Record ID', data.expedienteId || '—')}
+
+        {worksheetMode ? (
+          <>
+            {row('Insurance Rep', data.repName)}
+            {row('Reference #', data.refNum)}
+            {row('Record ID', data.expedienteId || '—')}
+          </>
+        ) : (
+          <>
+            <div className="summary-row">
+              <span className="summary-key">Covered?</span>
+              {chip(data.cobertura, ['Yes', 'Partial', 'Si', 'Parcial'].includes(data.cobertura))}
+            </div>
+            <div className="summary-row">
+              <span className="summary-key">Prior authorization</span>
+              {chip(data.autorizacion, authChipOk)}
+            </div>
+            {row('Deductible (call)', data.deducibleTotal)}
+            {row('Deductible met', data.deducibleMet)}
+            {row('Copay/Coinsurance (call)', data.copago)}
+            {row('Out-of-pocket max.', data.oopMax)}
+            {row('Insurance Rep', data.repName)}
+            {row('Reference #', data.refNum)}
+            {data.notasRep ? (
+              <div className="summary-row" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                <span className="summary-key">Additional notes</span>
+                <span className="summary-val" style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  {data.notasRep}
+                </span>
+              </div>
+            ) : null}
+            {row('Record ID', data.expedienteId || '—')}
+          </>
+        )}
       </div>
 
       <div
@@ -204,7 +217,8 @@ export function ClinicaResultCard({ data, onReset }) {
         }}
       >
         <p style={{ fontSize: 13, color: '#34d399', margin: 0 }}>
-          Report sent automatically to <strong>{getReportDestEmail()}</strong>
+          {worksheetMode ? 'Worksheet PDF emailed automatically to ' : 'Report sent automatically to '}
+          <strong>{getReportDestEmail()}</strong>
         </p>
       </div>
       <button type="button" className="btn btn-secondary" style={{ marginTop: 18 }} onClick={onReset}>

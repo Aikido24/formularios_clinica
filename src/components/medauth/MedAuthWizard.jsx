@@ -9,10 +9,11 @@ import {
 import { createEmptyScriptAnswers } from '../../medauthForm.js'
 import {
   buildVerificationReport,
-  submitVerificationFlow,
 } from '../../services/verificationSubmit.js'
 import { buildIntakePdf } from '../../services/intakePdf.js'
 import { submitIntakePdfEmail } from '../../services/intakePdfSubmit.js'
+import { buildWorksheetPdf } from '../../services/worksheetPdf.js'
+import { submitWorksheetPdfEmail } from '../../services/worksheetPdfSubmit.js'
 import { FRONT_OCR_CLEAR_KEYS, BACK_OCR_CLEAR_KEYS } from './clinicaFormFields.js'
 import { ClinicaResultCard } from './ClinicaResultCard.jsx'
 import IntakeForm from './IntakeForm.jsx'
@@ -300,16 +301,21 @@ export default function MedAuthWizard() {
         repName: callForm.spokeWith.trim(),
         refNum: callForm.callRefNumber.trim(),
       }
-      const reportBase = buildVerificationReport(extractedData, script, intakeData, callForm)
-      const data = { ...reportBase, b64Front, b64Back }
-      const full = await submitVerificationFlow({
-        frontFile: frontFile,
-        backFile: backFile,
-        data,
-        intakeForm: intakeData,
+      const { base64, filename } = await buildWorksheetPdf({ callForm })
+      await submitWorksheetPdfEmail({
+        pdfBase64: base64,
+        filename,
         callForm,
-        onStatus: () => {},
       })
+
+      const reportBase = buildVerificationReport(extractedData, script, intakeData, callForm)
+      const full = {
+        ...reportBase,
+        expedienteId: crypto.randomUUID(),
+        b64Front,
+        b64Back,
+        worksheetPdfSent: true,
+      }
       setStatusSending(false)
       setStatusSuccess(true)
       setTimeout(() => {
@@ -590,7 +596,7 @@ export default function MedAuthWizard() {
               }}
             >
               <p style={{ fontSize: 14, color: 'var(--apto)', margin: 0 }}>
-                <Icon name="check_circle" /> Report submitted! Calculating result...
+                <Icon name="check_circle" /> Worksheet PDF sent!
               </p>
             </div>
             <div

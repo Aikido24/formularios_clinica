@@ -4,6 +4,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { auth, ensureCallableAuth, functions, getStorageInstances } from '../firebase.js'
 import { DEFAULT_REPORT_EMAIL } from '../medauthForm.js'
 import { getIntakeFormRows } from '../components/medauth/intakeFormRows.js'
+import { getCallScriptFormRows } from '../components/medauth/callScriptFormRows.js'
 
 /**
  * @typedef {ReturnType<import('../medauthForm.js').createEmptyScriptAnswers>} VerificationScriptAnswers
@@ -178,22 +179,9 @@ function intakeFormEmailSection(intake, fila) {
 /** @param {Record<string, unknown>} cs */
 function callScriptWorksheetEmailSection(cs, fila) {
   const c = cs || {}
-  const rows = [
-    ['Worksheet — Patient', c.patientName],
-    ['Worksheet — DOB', c.patientDob],
-    ['Worksheet — Insured', c.insured],
-    ['Worksheet — Insurance / Phone', [c.insuranceName, c.insurancePhone].filter(Boolean).join(' · ')],
-    ['Worksheet — ID # / Group #', [c.insuranceId, c.groupNumber].filter(Boolean).join(' · ')],
-    ['Worksheet — Spoke with / Call ref #', [c.spokeWith, c.callRefNumber].filter(Boolean).join(' · ')],
-    ['Worksheet — Plan type / Effective date', [c.planType, c.effectiveDate].filter(Boolean).join(' · ')],
-    ['Worksheet — PCP', c.pcpName],
-    ['Worksheet — Third-party auth portal', c.thirdPartyAuthPortal],
-    ['Worksheet — In-net OV copay / Deductible', [c.inNetOvCopay, c.inNetDeductible].filter(Boolean).join(' · ')],
-    ['Worksheet — Out-of-net OV copay / Deductible', [c.outNetOvCopay, c.outNetDeductible].filter(Boolean).join(' · ')],
-    ['Worksheet — General notes', c.generalNotes],
-    ['Worksheet — Comorbidities (notes)', c.comorbiditiesNotes],
-    ['Worksheet — Final note', c.finalNote],
-  ]
+  const rows = getCallScriptFormRows(c).flatMap((section) =>
+    section.rows.map(([lab, val]) => [`Worksheet — ${lab}`, val]),
+  )
   const body = rows.map(([lab, val]) => fila(lab, val)).join('')
   return `
 <div style="margin-bottom:24px;">

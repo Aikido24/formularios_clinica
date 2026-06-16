@@ -1,25 +1,20 @@
 import { jsPDF } from 'jspdf'
 
 import { CLINICA_FORM_SECTIONS } from '../components/medauth/clinicaFormFields.js'
-import { getIntakeFormRows, formatRowValue } from '../components/medauth/intakeFormRows.js'
+import { getIntakeFormRows } from '../components/medauth/intakeFormRows.js'
 
-const MARGIN = 14
-const PAGE_W = 210
-const PAGE_H = 297
-const CONTENT_W = PAGE_W - MARGIN * 2
-const LABEL_W = 62
-const LINE_H = 5.5
-
-/** @param {string} name */
-function slugifyFilename(name) {
-  return (
-    String(name || 'patient')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'patient'
-  )
-}
+import {
+  CONTENT_W,
+  LABEL_W,
+  LINE_H,
+  MARGIN,
+  PAGE_H,
+  PAGE_W,
+  ensureSpace,
+  sectionTitle,
+  slugifyFilename,
+  drawRows,
+} from './pdfLayout.js'
 
 /** @param {string} dataUrl */
 function parseDataUrl(dataUrl) {
@@ -29,60 +24,6 @@ function parseDataUrl(dataUrl) {
   const mime = m[1].toLowerCase()
   const format = mime.includes('png') ? 'PNG' : 'JPEG'
   return { format, data: m[2] }
-}
-
-/**
- * @param {jsPDF} doc
- * @param {number} y
- * @param {number} needed
- */
-function ensureSpace(doc, y, needed) {
-  if (y + needed > PAGE_H - MARGIN) {
-    doc.addPage()
-    return MARGIN
-  }
-  return y
-}
-
-/**
- * @param {jsPDF} doc
- * @param {number} startY
- * @param {string} title
- */
-function sectionTitle(doc, startY, title) {
-  let y = ensureSpace(doc, startY, 14)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(30, 58, 95)
-  doc.text(title, MARGIN, y)
-  y += 7
-  doc.setDrawColor(200, 200, 200)
-  doc.line(MARGIN, y, PAGE_W - MARGIN, y)
-  return y + 5
-}
-
-/**
- * @param {jsPDF} doc
- * @param {number} startY
- * @param {[string, unknown][]} rows
- */
-function drawRows(doc, startY, rows) {
-  let y = startY
-  doc.setFontSize(9)
-  for (const [label, value] of rows) {
-    const val = formatRowValue(value)
-    const valLines = doc.splitTextToSize(val, CONTENT_W - LABEL_W - 4)
-    const blockH = Math.max(LINE_H, valLines.length * LINE_H)
-    y = ensureSpace(doc, y, blockH + 2)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(100, 100, 100)
-    doc.text(String(label), MARGIN, y)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(40, 40, 40)
-    doc.text(valLines, MARGIN + LABEL_W, y)
-    y += blockH + 2
-  }
-  return y
 }
 
 /** @param {Record<string, unknown>} extracted */
