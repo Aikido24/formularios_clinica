@@ -1,8 +1,9 @@
 import { httpsCallable } from 'firebase/functions'
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 
-import { ensureCallableAuth, functions, getStorageInstances } from '../firebase.js'
+import { auth, ensureCallableAuth, functions, getStorageInstances } from '../firebase.js'
 import { DEFAULT_REPORT_EMAIL } from '../medauthForm.js'
+import { getIntakeFormRows } from '../components/medauth/intakeFormRows.js'
 
 /**
  * @typedef {ReturnType<import('../medauthForm.js').createEmptyScriptAnswers>} VerificationScriptAnswers
@@ -109,6 +110,50 @@ export function evaluar(data) {
   return cobOK && authOK ? 'ELIGIBLE' : 'NOT ELIGIBLE'
 }
 
+function ynLabel(v) {
+  if (v === 'yes') return 'Yes'
+  if (v === 'no') return 'No'
+  return ''
+}
+
+/**
+ * Maps intake + call worksheet into fields required by firebase-functions submitVerificationReport.
+ * @param {Record<string, unknown>} data
+ * @param {{ intakeForm?: Record<string, unknown>; callForm?: Record<string, unknown> }} sources
+ */
+export function enrichReportForCallable(data, { intakeForm, callForm } = {}) {
+  const intake = intakeForm && typeof intakeForm === 'object' ? intakeForm : {}
+  const cs = callForm && typeof callForm === 'object' ? callForm : {}
+  const nombre =
+    String(data.nombre || '').trim() ||
+    String(cs.patientName || '').trim() ||
+    String(intake.patientName || '').trim() ||
+    'Patient'
+  const memberId =
+    String(data.memberId || '').trim() ||
+    String(cs.insuranceId || '').trim() ||
+    String(intake.primaryId || '').trim() ||
+    '—'
+  const groupNum =
+    String(data.groupNum || '').trim() ||
+    String(cs.groupNumber || '').trim() ||
+    String(intake.primaryGroup || '').trim() ||
+    '—'
+  const authParts = []
+  if (cs.bariatricsInPtAuthReq) {
+    authParts.push(`Bariatric IP auth: ${ynLabel(cs.bariatricsInPtAuthReq) || cs.bariatricsInPtAuthReq}`)
+  }
+  if (cs.plasticsAuthReq) {
+    authParts.push(`Plastics auth: ${ynLabel(cs.plasticsAuthReq) || cs.plasticsAuthReq}`)
+  }
+  if (cs.definiteExclusion) {
+    authParts.push(`Definite exclusion: ${ynLabel(cs.definiteExclusion) || cs.definiteExclusion}`)
+  }
+  const autorizacionFinal = authParts.join(' · ') || 'Recorded on verification worksheet'
+  const resultado = String(data.resultado || '').trim() || 'PENDING'
+  return { ...data, nombre, memberId, groupNum, autorizacionFinal, resultado }
+}
+
 function emailCardImgTag(src, alt) {
   if (!src) {
     return `<div style="width:100%;height:100px;background:#1e1e2e;border:1px dashed #334155;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:12px;">No image</div>`
@@ -119,46 +164,7 @@ function emailCardImgTag(src, alt) {
 
 /** @param {Record<string, unknown>} intake */
 function intakeFormEmailSection(intake, fila) {
-  const i = intake || {}
-  const yn = (v) => (v === 'yes' ? 'Yes' : v === 'no' ? 'No' : '—')
-  const parts = []
-  if (i.comorbidDiabetic) parts.push('Diabetic')
-  if (i.comorbidHbp) parts.push('High BP')
-  if (i.comorbidChol) parts.push('High Cholesterol')
-  if (i.comorbidThyroid) parts.push('Thyroid')
-  if (i.comorbidSleepApnea) parts.push('Sleep Apnea')
-  const comorb = parts.length ? parts.join(', ') : '—'
-  const addr = [i.addressLine1, i.addressLine2].filter(Boolean).join(', ')
-  const rows = [
-    ['Intake — Name', i.patientName],
-    ['Intake — Address', addr],
-    ['Intake — Phone', i.patientPhone],
-    ['Intake — Email', i.email],
-    ['Intake — Gender', i.gender === 'male' ? 'Male' : i.gender === 'female' ? 'Female' : '—'],
-    ['Intake — DOB', i.patientDob],
-    ['Intake — SS#', i.patientSs],
-    ['Intake — Intake date', i.intakeDate],
-    ['Intake — Referred by', i.referredBy],
-    ['Intake — Staff', i.staffName],
-    ['Intake — HT / WT / BMI', [i.height, i.weight, i.bmi].filter(Boolean).join(' · ')],
-    ['Intake — Primary care provider', i.primaryCareProvider],
-    ['Intake — Primary insurance', i.primaryInsurance],
-    ['Intake — Primary ins. phone', i.primaryInsurancePhone],
-    ['Intake — Primary insured', i.primaryInsuredName],
-    ['Intake — Primary ID / Group', [i.primaryId, i.primaryGroup].filter(Boolean).join(' / ')],
-    ['Intake — Secondary insurance', i.secondaryInsurance],
-    ['Intake — Secondary ins. phone', i.secondaryInsurancePhone],
-    ['Intake — Self pay', yn(i.selfPay)],
-    ['Intake — Comorbidities', comorb],
-    ['Intake — Weight-related health', i.healthIssuesWeight],
-    ['Intake — Previous surgery?', yn(i.prevSurgery)],
-    ['Intake — Revision interest?', yn(i.interestedRevision)],
-    ['Intake — Skin removal?', yn(i.interestedSkinRemoval)],
-    ['Intake — Hernia repair?', yn(i.needHerniaRepair)],
-    ['Intake — Prior surgeon / date', [i.surgerySurgeonName, i.surgeryDateYear].filter(Boolean).join(' · ')],
-    ['Intake — Start / end weight', [i.surgeryStartWt, i.surgeryEndWt].filter(Boolean).join(' → ')],
-    ['Intake — Surgery comments', i.surgeryComments],
-  ]
+  const rows = getIntakeFormRows(intake).map(([lab, val]) => [`Intake — ${lab}`, val])
   const body = rows.map(([lab, val]) => fila(lab, val)).join('')
   return `
 <div style="margin-bottom:24px;">
@@ -368,14 +374,16 @@ ${data.rxBin || data.rxPcn || data.rxGrp
 export async function uploadCardImage(file, side) {
   if (!file) return null
   const path = `seguros/${Date.now()}_${side}_${file.name.replace(/[^\w.-]/g, '_')}`
+  const contentType = file.type && file.type.startsWith('image/') ? file.type : 'image/jpeg'
   let lastErr
   for (const st of getStorageInstances()) {
     try {
       const r = ref(st, path)
-      await uploadBytes(r, file)
+      await uploadBytes(r, file, { contentType })
       return await getDownloadURL(r)
     } catch (e) {
       lastErr = e
+      console.warn(`Storage upload failed (${path}):`, e?.code || e?.message || e)
     }
   }
   throw lastErr
@@ -387,8 +395,10 @@ export async function uploadCardImage(file, side) {
  * @param {File | null} opts.backFile
  * @param {ReturnType<typeof buildVerificationReport> & { b64Front?: string; b64Back?: string }} opts.data
  * @param {(phase: string) => void} [opts.onStatus]
+ * @param {Record<string, unknown>} [opts.intakeForm]
+ * @param {Record<string, unknown>} [opts.callForm]
  */
-export async function submitVerificationFlow({ frontFile, backFile, data, onStatus }) {
+export async function submitVerificationFlow({ frontFile, backFile, data, onStatus, intakeForm, callForm }) {
   await ensureCallableAuth()
 
   onStatus?.('Uploading card images...')
@@ -405,12 +415,15 @@ export async function submitVerificationFlow({ frontFile, backFile, data, onStat
     await new Promise((r) => setTimeout(r, 600))
   }
 
-  const full = {
-    ...data,
-    urlFrente: urlFront || '',
-    urlReverso: urlBack || '',
-    resultado: evaluar(data),
-  }
+  const full = enrichReportForCallable(
+    {
+      ...data,
+      urlFrente: urlFront || '',
+      urlReverso: urlBack || '',
+      resultado: evaluar(data),
+    },
+    { intakeForm, callForm },
+  )
 
   full.expedienteId = crypto.randomUUID()
 
@@ -426,12 +439,15 @@ export async function submitVerificationFlow({ frontFile, backFile, data, onStat
     Object.entries(full).filter(([k]) => !k.startsWith('b64')),
   )
 
+  const idToken = await auth.currentUser?.getIdToken()
+
   const submitVerificationReport = httpsCallable(functions, 'submitVerificationReport')
   await submitVerificationReport({
     subject,
     text: textBody,
     html_report: generateEmailHTML({ ...full, expedienteId: full.expedienteId }),
     report: reportForCallable,
+    _idToken: idToken,
   })
 
   return full

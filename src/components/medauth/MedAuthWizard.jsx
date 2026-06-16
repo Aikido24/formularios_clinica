@@ -11,6 +11,8 @@ import {
   buildVerificationReport,
   submitVerificationFlow,
 } from '../../services/verificationSubmit.js'
+import { buildIntakePdf } from '../../services/intakePdf.js'
+import { submitIntakePdfEmail } from '../../services/intakePdfSubmit.js'
 import { FRONT_OCR_CLEAR_KEYS, BACK_OCR_CLEAR_KEYS } from './clinicaFormFields.js'
 import { ClinicaResultCard } from './ClinicaResultCard.jsx'
 import IntakeForm from './IntakeForm.jsx'
@@ -73,6 +75,9 @@ export default function MedAuthWizard() {
   const [ocrBackLabel, setOcrBackLabel] = useState('Reading back of card...')
   const [extractedData, setExtractedData] = useState(() => ({ ...EMPTY_EXTRACTED_DATA }))
   const [formError, setFormError] = useState(false)
+  const [continuing, setContinuing] = useState(false)
+  const [continuePhase, setContinuePhase] = useState('')
+  const [continueError, setContinueError] = useState('')
   const [scriptAnswers] = useState(() => createEmptyScriptAnswers())
   const [callForm, setCallForm] = useState(() => createEmptyCallScriptForm())
   const [submitting, setSubmitting] = useState(false)
@@ -126,6 +131,9 @@ export default function MedAuthWizard() {
     setOcrBackVisible(false)
     setExtractedData({ ...EMPTY_EXTRACTED_DATA })
     setFormError(false)
+    setContinuing(false)
+    setContinuePhase('')
+    setContinueError('')
     setCallForm(createEmptyCallScriptForm())
     setStatusSending(false)
     setStatusSuccess(false)
@@ -239,13 +247,36 @@ export default function MedAuthWizard() {
     }
   }
 
-  const goToScript = () => {
+  const goToScript = async () => {
     setFormError(false)
+    setContinueError('')
     if (!frontFile || !backFile) {
       setFormError(true)
       return
     }
-    setStep(2)
+    setContinuing(true)
+    try {
+      setContinuePhase('Generating PDF…')
+      const { base64, filename } = await buildIntakePdf({
+        intakeForm: intakeData,
+        extractedData,
+        b64Front,
+        b64Back,
+      })
+      setContinuePhase('Sending email…')
+      await submitIntakePdfEmail({
+        pdfBase64: base64,
+        filename,
+        intakeForm: intakeData,
+      })
+      setStep(2)
+    } catch (err) {
+      console.error(err)
+      setContinueError(`Error: ${err?.message || 'Could not send intake PDF. Please try again.'}`)
+    } finally {
+      setContinuing(false)
+      setContinuePhase('')
+    }
   }
 
   const submitForm = async () => {
@@ -275,6 +306,8 @@ export default function MedAuthWizard() {
         frontFile: frontFile,
         backFile: backFile,
         data,
+        intakeForm: intakeData,
+        callForm,
         onStatus: () => {},
       })
       setStatusSending(false)
@@ -496,10 +529,29 @@ export default function MedAuthWizard() {
               <Icon name="warning" /> Please upload both the front and back of your insurance card before continuing.
             </div>
 
+            <div
+              id="continueErrorBanner"
+              style={{
+                display: continueError ? 'flex' : 'none',
+                alignItems: 'center',
+                gap: 10,
+                background: 'rgba(239,68,68,0.12)',
+                border: '1px solid rgba(239,68,68,0.4)',
+                borderRadius: 10,
+                padding: '12px 18px',
+                color: '#fca5a5',
+                fontSize: 14,
+                marginTop: 20,
+                marginBottom: 14,
+              }}
+            >
+              <Icon name="warning" /> {continueError}
+            </div>
+
             <div className="nav-buttons">
               <span />
-              <button type="button" className="btn btn-primary" onClick={goToScript}>
-                Continue to worksheet <Icon name="assignment" />
+              <button type="button" className="btn btn-primary" onClick={goToScript} disabled={continuing}>
+                {continuing ? continuePhase || 'Processing…' : 'Continue to worksheet'} {!continuing ? <Icon name="assignment" /> : null}
               </button>
             </div>
           </div>

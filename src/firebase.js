@@ -15,41 +15,16 @@ const firebaseConfig = {
   measurementId: 'G-9Q08SGT72C',
 }
 
-const STORAGE_BUCKET_LEGACY = 'datosdelpaciente-8e3ba.appspot.com'
-const STORAGE_BUCKET_NEW = 'datosdelpaciente-8e3ba.firebasestorage.app'
-
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-
-/** Secondary app so uploads work if default bucket name mismatches (CORS / wrong bucket). */
-const STORAGE_ALT_APP_NAME = 'storage-bucket-alt'
-let storageAltApp = null
-try {
-  const altBucket =
-    firebaseConfig.storageBucket === STORAGE_BUCKET_LEGACY ? STORAGE_BUCKET_NEW : STORAGE_BUCKET_LEGACY
-  if (!getApps().some((a) => a.name === STORAGE_ALT_APP_NAME)) {
-    storageAltApp = initializeApp({ ...firebaseConfig, storageBucket: altBucket }, STORAGE_ALT_APP_NAME)
-  } else {
-    storageAltApp = getApp(STORAGE_ALT_APP_NAME)
-  }
-} catch (e) {
-  if (!/already exists|duplicate app/i.test(String(e?.message))) {
-    console.warn('Firebase storage alt app:', e)
-  }
-}
 
 const auth = getAuth(app)
 const db = getFirestore(app)
 const functions = getFunctions(app, 'us-central1')
 const storage = getStorage(app)
-const storageAlt = storageAltApp ? getStorage(storageAltApp) : null
 
-/** Try primary storage first, then alternate bucket. */
+/** Single default bucket only (legacy .appspot.com causes 403/CORS noise). */
 export function getStorageInstances() {
-  const list = [storage]
-  if (storageAlt) {
-    list.push(storageAlt)
-  }
-  return list
+  return [storage]
 }
 
 let analytics = null
@@ -88,4 +63,4 @@ export async function ensureCallableAuth() {
   return authReadyPromise
 }
 
-export { app, analytics, auth, db, functions, storage, storageAlt }
+export { app, analytics, auth, db, functions, storage }
