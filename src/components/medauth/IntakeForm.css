@@ -70,6 +70,25 @@
   color: #334155;
 }
 
+.intake-required {
+  color: #c53030;
+  font-weight: 800;
+}
+
+.intake-field input.intake-input-error,
+.intake-field input.intake-input-error:focus {
+  border-bottom-color: #c53030;
+  background: rgba(197, 48, 48, 0.06);
+}
+
+.intake-radio-row.intake-input-error {
+  padding: 6px 8px;
+  margin: -6px -8px 0;
+  border-radius: 4px;
+  outline: 1px solid rgba(197, 48, 48, 0.45);
+  background: rgba(197, 48, 48, 0.06);
+}
+
 .intake-field input[type='text'],
 .intake-field input[type='tel'],
 .intake-field input[type='email'],
@@ -91,6 +110,17 @@
 .intake-field textarea:focus {
   border-bottom-color: var(--color-link, #4a90e2);
   background: rgba(74, 144, 226, 0.04);
+}
+
+.intake-field input.intake-date-readonly {
+  color: #475569;
+  cursor: default;
+  pointer-events: none;
+}
+
+.intake-field input.intake-date-readonly:focus {
+  border-bottom-color: var(--intake-line);
+  background: transparent;
 }
 
 .intake-field textarea {
@@ -194,6 +224,49 @@
   margin-bottom: 10px;
 }
 
+.intake-surgery-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.intake-surgery-question {
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--intake-line);
+}
+
+.intake-surgery-question:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.intake-surgery-question:first-child {
+  padding-top: 0;
+}
+
+.intake-surgery-question-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.intake-surgery-question-label {
+  font-weight: 600;
+  color: var(--intake-ink);
+  line-height: 1.4;
+}
+
+.intake-surgery-details {
+  margin-top: 12px;
+  padding: 12px 12px 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--intake-line);
+}
+
 .intake-surgery-yn {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -229,4 +302,25 @@
   color: #64748b;
   margin-top: 14px;
   line-height: 1.45;
+}
+
+.intake-field-hint {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11px;
+  color: #64748b;
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
+.intake-field-hint strong {
+  color: #0f2847;
+}
+
+.intake-field-hint--active {
+  margin: -4px 0 12px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: #9a3412;
+  background: rgba(234, 88, 12, 0.08);
+  border: 1px solid rgba(234, 88, 12, 0.25);
 }

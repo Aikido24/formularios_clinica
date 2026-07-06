@@ -49,6 +49,22 @@
 
     .ocr-side-panel { margin-top:10px; background:var(--tint-accent-06); border:1px solid var(--tint-accent-20); border-radius:var(--radius-sm); padding:12px 14px; display:none; }
     .ocr-side-panel.visible { display:block; animation:fadeSlideIn 0.3s ease; }
+    .ocr-side-panel--fair { background:rgba(234, 179, 8, 0.08); border-color:rgba(234, 179, 8, 0.35); }
+    .ocr-side-panel--fair .ocr-side-label { color:#b45309; }
+    .ocr-side-panel--fair .ocr-side-fill { background:#d97706; }
+    .ocr-side-panel--poor { background:rgba(239, 68, 68, 0.08); border-color:rgba(239, 68, 68, 0.35); }
+    .ocr-side-panel--poor .ocr-side-label { color:#b91c1c; }
+    .ocr-side-panel--poor .ocr-side-fill { background:#dc2626; }
+    .ocr-quality-report { margin-top:10px; padding:10px 12px; border-radius:8px; font-family:Inter,system-ui,sans-serif; font-size:11px; line-height:1.45; }
+    .ocr-quality-report--good { background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.35); color:#047857; }
+    .ocr-quality-report--fair { background:rgba(234,179,8,0.1); border:1px solid rgba(234,179,8,0.35); color:#b45309; }
+    .ocr-quality-report--poor { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.35); color:#b91c1c; }
+    .ocr-quality-title { font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; font-size:10px; }
+    .ocr-quality-title strong { font-size:12px; letter-spacing:0; text-transform:none; }
+    .ocr-quality-metrics { list-style:none; margin:0; padding:0; display:grid; gap:3px; }
+    .ocr-quality-metrics li { display:flex; justify-content:space-between; gap:8px; }
+    .ocr-quality-metrics span { font-weight:700; }
+    .ocr-quality-block-banner { display:flex; align-items:center; gap:10px; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.4); border-radius:10px; padding:12px 18px; color:#b91c1c; font-size:14px; margin-top:20px; margin-bottom:14px; font-weight:600; }
     .ocr-side-header { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
     .ocr-side-bar  { height:3px; background:var(--tint-accent-20); border-radius:99px; overflow:hidden; }
     .ocr-side-fill { height:100%; background:var(--accent); transition:width 0.3s ease; width:0%; }

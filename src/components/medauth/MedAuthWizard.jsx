@@ -5,6 +5,7 @@ import {
   prepareImageForOcrBlob,
   runInsuranceCardOcr,
   mergeParsedData,
+  getOcrQualityLabel,
 } from '../../ocrHelpers.js'
 import { createEmptyScriptAnswers } from '../../medauthForm.js'
 import {
@@ -17,7 +18,7 @@ import { submitWorksheetPdfEmail } from '../../services/worksheetPdfSubmit.js'
 import { FRONT_OCR_CLEAR_KEYS, BACK_OCR_CLEAR_KEYS } from './clinicaFormFields.js'
 import { ClinicaResultCard } from './ClinicaResultCard.jsx'
 import IntakeForm from './IntakeForm.jsx'
-import { createEmptyIntakeForm } from './intakeFormModel.js'
+import { createEmptyIntakeForm, validateIntakeRequired } from './intakeFormModel.js'
 import CallScriptForm from './CallScriptForm.jsx'
 import { createEmptyCallScriptForm } from './callScriptFormModel.js'
 
@@ -40,11 +41,40 @@ function Icon({ name, className = '' }) {
   return <span className={`material-symbols-outlined ${className}`.trim()}>{name}</span>
 }
 
-function OcrSideLabelContent({ visible, fill, label }) {
-  if (visible && fill >= 100 && label === 'Data extracted successfully') {
+function OcrQualityReport({ quality, fill, visible }) {
+  if (!visible || fill < 100 || !quality) return null
+  return (
+    <div className={`ocr-quality-report ocr-quality-report--${quality.level}`}>
+      <div className="ocr-quality-title">
+        Image quality: <strong>{getOcrQualityLabel(quality.level)}</strong>
+      </div>
+      <ul className="ocr-quality-metrics">
+        <li>
+          Sharpness: <span>{Math.round(quality.sharpness)}</span>
+        </li>
+        <li>
+          OCR confidence: <span>{Math.round(quality.confidence)}%</span>
+        </li>
+        <li>
+          Fields detected: <span>{quality.fieldsFound}</span>
+        </li>
+      </ul>
+    </div>
+  )
+}
+
+function OcrSideLabelContent({ visible, fill, label, quality }) {
+  if (visible && fill >= 100 && quality === 'good') {
     return (
       <>
         <Icon name="check_circle" /> {label}
+      </>
+    )
+  }
+  if (visible && fill >= 100 && (quality === 'fair' || quality === 'poor')) {
+    return (
+      <>
+        <Icon name="warning" /> {label}
       </>
     )
   }
@@ -74,8 +104,11 @@ export default function MedAuthWizard() {
   const [ocrBackFill, setOcrBackFill] = useState(0)
   const [ocrFrontLabel, setOcrFrontLabel] = useState('Reading front of card...')
   const [ocrBackLabel, setOcrBackLabel] = useState('Reading back of card...')
+  const [ocrFrontQuality, setOcrFrontQuality] = useState(null)
+  const [ocrBackQuality, setOcrBackQuality] = useState(null)
   const [extractedData, setExtractedData] = useState(() => ({ ...EMPTY_EXTRACTED_DATA }))
-  const [formError, setFormError] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [intakeFieldErrors, setIntakeFieldErrors] = useState(() => ({}))
   const [continuing, setContinuing] = useState(false)
   const [continuePhase, setContinuePhase] = useState('')
   const [continueError, setContinueError] = useState('')
@@ -88,10 +121,12 @@ export default function MedAuthWizard() {
   const [errorMsg, setErrorMsg] = useState('')
   const [resultData, setResultData] = useState(null)
   const [intakeData, setIntakeData] = useState(() => createEmptyIntakeForm())
+  const [headerHidden, setHeaderHidden] = useState(false)
 
   const frontCamRef = useRef(null)
   const backCamRef = useRef(null)
   const callStepPrefillRef = useRef(0)
+  const lastScrollYRef = useRef(0)
 
   useEffect(() => {
     if (step !== 2) {
@@ -116,6 +151,28 @@ export default function MedAuthWizard() {
     }))
   }, [step, intakeData, extractedData])
 
+  useEffect(() => {
+    setHeaderHidden(false)
+    lastScrollYRef.current = 0
+  }, [step])
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY
+      if (y <= 48) {
+        setHeaderHidden(false)
+      } else if (y > lastScrollYRef.current + 8) {
+        setHeaderHidden(true)
+      } else if (y < lastScrollYRef.current - 8) {
+        setHeaderHidden(false)
+      }
+      lastScrollYRef.current = y
+    }
+
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   const resetAll = useCallback(() => {
     if (frontUrl) URL.revokeObjectURL(frontUrl)
     if (backUrl) URL.revokeObjectURL(backUrl)
@@ -131,7 +188,8 @@ export default function MedAuthWizard() {
     setOcrFrontVisible(false)
     setOcrBackVisible(false)
     setExtractedData({ ...EMPTY_EXTRACTED_DATA })
-    setFormError(false)
+    setFormError('')
+    setIntakeFieldErrors({})
     setContinuing(false)
     setContinuePhase('')
     setContinueError('')
@@ -144,15 +202,21 @@ export default function MedAuthWizard() {
     setOcrBackFill(0)
     setOcrFrontLabel('Reading front of card...')
     setOcrBackLabel('Reading back of card...')
+    setOcrFrontQuality(null)
+    setOcrBackQuality(null)
     setIntakeData(createEmptyIntakeForm())
+    setHeaderHidden(false)
+    lastScrollYRef.current = 0
   }, [frontUrl, backUrl])
 
   const runOcrForSide = async (side, file) => {
     const setFill = side === 'front' ? setOcrFrontFill : setOcrBackFill
     const setLabel = side === 'front' ? setOcrFrontLabel : setOcrBackLabel
+    const setQuality = side === 'front' ? setOcrFrontQuality : setOcrBackQuality
     const setPanel = side === 'front' ? setOcrFrontVisible : setOcrBackVisible
     setPanel(true)
     setFill(5)
+    setQuality(null)
     setLabel(side === 'front' ? 'Reading front of card...' : 'Reading back of card...')
     try {
       const prep = await prepareImageForOcrBlob(file)
@@ -161,11 +225,15 @@ export default function MedAuthWizard() {
         backBlob: side === 'back' ? prep : null,
         frontFallbackBlob: side === 'front' ? file : null,
         backFallbackBlob: side === 'back' ? file : null,
+        frontSharpnessBlob: side === 'front' ? file : null,
+        backSharpnessBlob: side === 'back' ? file : null,
         onProgress: (p) => setFill(p),
         logger: () => {},
       })
       setFill(100)
-      setLabel('Data extracted successfully')
+      const quality = side === 'front' ? out.qualityFront : out.qualityBack
+      setQuality(quality ?? null)
+      setLabel(quality?.message ?? 'Data extracted successfully')
 
       if (side === 'front') {
         const { merged } = mergeParsedData({ ...EMPTY_EXTRACTED_DATA }, out.parsedFront)
@@ -175,7 +243,14 @@ export default function MedAuthWizard() {
       }
     } catch (err) {
       console.error(err)
-      setLabel('Read error — please enter the details manually')
+      setQuality({
+        level: 'poor',
+        sharpness: 0,
+        confidence: 0,
+        fieldsFound: 0,
+        message: 'Read error — please retake the photo',
+      })
+      setLabel('Read error — please retake the photo')
     }
   }
 
@@ -187,6 +262,8 @@ export default function MedAuthWizard() {
       setOcrBackFill(0)
       setOcrFrontLabel('Reading front of card...')
       setOcrBackLabel('Reading back of card...')
+      setOcrFrontQuality(null)
+      setOcrBackQuality(null)
     }
   }, [frontFile, backFile])
 
@@ -226,6 +303,7 @@ export default function MedAuthWizard() {
       setOcrFrontVisible(false)
       setOcrFrontFill(0)
       setOcrFrontLabel('Reading front of card...')
+      setOcrFrontQuality(null)
       setExtractedData((prev) => {
         const next = { ...prev }
         for (const k of FRONT_OCR_CLEAR_KEYS) next[k] = ''
@@ -240,6 +318,7 @@ export default function MedAuthWizard() {
       setOcrBackVisible(false)
       setOcrBackFill(0)
       setOcrBackLabel('Reading back of card...')
+      setOcrBackQuality(null)
       setExtractedData((prev) => {
         const next = { ...prev }
         for (const k of BACK_OCR_CLEAR_KEYS) next[k] = ''
@@ -249,12 +328,34 @@ export default function MedAuthWizard() {
   }
 
   const goToScript = async () => {
-    setFormError(false)
+    setFormError('')
+    setIntakeFieldErrors({})
     setContinueError('')
-    if (!frontFile || !backFile) {
-      setFormError(true)
+
+    const intakeCheck = validateIntakeRequired(intakeData)
+    if (!intakeCheck.valid) {
+      setIntakeFieldErrors(intakeCheck.errors)
+      setFormError(intakeCheck.message)
       return
     }
+
+    if (!frontFile || !backFile) {
+      setFormError('Please upload both the front and back of your insurance card before continuing.')
+      return
+    }
+
+    if (ocrFrontQuality?.level === 'poor' || ocrBackQuality?.level === 'poor') {
+      setFormError('One or both card photos are too blurry. Please retake clearer photos before continuing.')
+      return
+    }
+
+    const ocrBusy =
+      (ocrFrontVisible && ocrFrontFill < 100) || (ocrBackVisible && ocrBackFill < 100)
+    if (ocrBusy) {
+      setFormError('Please wait for card reading to finish before continuing.')
+      return
+    }
+
     setContinuing(true)
     try {
       setContinuePhase('Generating PDF…')
@@ -335,10 +436,15 @@ export default function MedAuthWizard() {
 
   const pct = STEP_LABELS[Math.min(step, 3) - 1]?.pct ?? 100
   const showProgress = step < 3
+  const ocrBusy =
+    (frontFile && ocrFrontVisible && ocrFrontFill < 100) ||
+    (backFile && ocrBackVisible && ocrBackFill < 100)
+  const cardQualityPoor = ocrFrontQuality?.level === 'poor' || ocrBackQuality?.level === 'poor'
+  const continueBlocked = continuing || ocrBusy || cardQualityPoor
 
   return (
     <div className="app-wrapper">
-      <header className="app-header">
+      <header className={`app-header${headerHidden ? ' is-hidden' : ''}`}>
         <div className="logo">
           <div className="logo-mark">
             <img
@@ -390,7 +496,19 @@ export default function MedAuthWizard() {
         {/* STEP 1 */}
         <div className={`form-section ${step === 1 ? 'active' : ''}`} id="step-1">
           <div className="section-card">
-            <IntakeForm value={intakeData} onChange={setIntakeData} />
+            <IntakeForm
+              value={intakeData}
+              fieldErrors={intakeFieldErrors}
+              onChange={(next) => {
+                setIntakeData(next)
+                if (Object.keys(intakeFieldErrors).length) {
+                  setIntakeFieldErrors(validateIntakeRequired(next).errors)
+                }
+                if (formError && validateIntakeRequired(next).valid) {
+                  setFormError('')
+                }
+              }}
+            />
 
             <div className="section-header" style={{ marginBottom: 6 }}>
               <div
@@ -450,16 +568,25 @@ export default function MedAuthWizard() {
                     </button>
                   </div>
                 </div>
-                <div className={`ocr-side-panel ${ocrFrontVisible ? 'visible' : ''}`} id="ocrFrontPanel">
+                <div
+                  className={`ocr-side-panel ${ocrFrontVisible ? 'visible' : ''}${ocrFrontQuality?.level === 'fair' ? ' ocr-side-panel--fair' : ''}${ocrFrontQuality?.level === 'poor' ? ' ocr-side-panel--poor' : ''}`}
+                  id="ocrFrontPanel"
+                >
                   <div className="ocr-side-header">
                     <div className="ocr-spinner" />
                     <span className="ocr-side-label" id="ocrFrontLabel">
-                      <OcrSideLabelContent visible={ocrFrontVisible} fill={ocrFrontFill} label={ocrFrontLabel} />
+                      <OcrSideLabelContent
+                        visible={ocrFrontVisible}
+                        fill={ocrFrontFill}
+                        label={ocrFrontLabel}
+                        quality={ocrFrontQuality?.level}
+                      />
                     </span>
                   </div>
                   <div className="ocr-side-bar">
                     <div className="ocr-side-fill" id="ocrFrontFill" style={{ width: `${ocrFrontFill}%` }} />
                   </div>
+                  <OcrQualityReport quality={ocrFrontQuality} fill={ocrFrontFill} visible={ocrFrontVisible} />
                 </div>
               </div>
 
@@ -502,19 +629,34 @@ export default function MedAuthWizard() {
                     </button>
                   </div>
                 </div>
-                <div className={`ocr-side-panel ${ocrBackVisible ? 'visible' : ''}`} id="ocrBackPanel">
+                <div
+                  className={`ocr-side-panel ${ocrBackVisible ? 'visible' : ''}${ocrBackQuality?.level === 'fair' ? ' ocr-side-panel--fair' : ''}${ocrBackQuality?.level === 'poor' ? ' ocr-side-panel--poor' : ''}`}
+                  id="ocrBackPanel"
+                >
                   <div className="ocr-side-header">
                     <div className="ocr-spinner" />
                     <span className="ocr-side-label" id="ocrBackLabel">
-                      <OcrSideLabelContent visible={ocrBackVisible} fill={ocrBackFill} label={ocrBackLabel} />
+                      <OcrSideLabelContent
+                        visible={ocrBackVisible}
+                        fill={ocrBackFill}
+                        label={ocrBackLabel}
+                        quality={ocrBackQuality?.level}
+                      />
                     </span>
                   </div>
                   <div className="ocr-side-bar">
                     <div className="ocr-side-fill" id="ocrBackFill" style={{ width: `${ocrBackFill}%` }} />
                   </div>
+                  <OcrQualityReport quality={ocrBackQuality} fill={ocrBackFill} visible={ocrBackVisible} />
                 </div>
               </div>
             </div>
+
+            {cardQualityPoor ? (
+              <div className="ocr-quality-block-banner">
+                <Icon name="warning" /> Card photo quality is too low. Retake clearer front and back photos to continue.
+              </div>
+            ) : null}
 
             <div
               id="formErrorBanner"
@@ -532,7 +674,7 @@ export default function MedAuthWizard() {
                 marginBottom: 14,
               }}
             >
-              <Icon name="warning" /> Please upload both the front and back of your insurance card before continuing.
+              <Icon name="warning" /> {formError}
             </div>
 
             <div
@@ -556,7 +698,19 @@ export default function MedAuthWizard() {
 
             <div className="nav-buttons">
               <span />
-              <button type="button" className="btn btn-primary" onClick={goToScript} disabled={continuing}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={goToScript}
+                disabled={continueBlocked}
+                title={
+                  cardQualityPoor
+                    ? 'Retake clearer card photos to continue'
+                    : ocrBusy
+                      ? 'Waiting for card reading to finish'
+                      : undefined
+                }
+              >
                 {continuing ? continuePhase || 'Processing…' : 'Continue to worksheet'} {!continuing ? <Icon name="assignment" /> : null}
               </button>
             </div>

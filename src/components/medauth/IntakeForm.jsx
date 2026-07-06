@@ -1,7 +1,9 @@
 import './IntakeForm.css'
 
-/** @param {{ value: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void }} props */
-export default function IntakeForm({ value, onChange }) {
+import { getTodayIntakeDate, SURGERY_HISTORY_QUESTIONS, clearSurgeryQuestionDetails, calculateBmi, sanitizeFloatInput } from './intakeFormModel.js'
+
+/** @param {{ value: Record<string, unknown>; onChange: (next: Record<string, unknown>) => void; fieldErrors?: Record<string, string> }} props */
+export default function IntakeForm({ value, onChange, fieldErrors = {} }) {
   const set =
     (key) =>
     (e) => {
@@ -10,29 +12,95 @@ export default function IntakeForm({ value, onChange }) {
       onChange({ ...value, [key]: v })
     }
 
-  const yn = (name, key) => (
-    <div>
-      <span>{name}</span>
-      <span className="intake-radio-row" style={{ gap: 10 }}>
-        <label>
+  const err = (key) => fieldErrors[key]
+  const inputClass = (key) => (err(key) ? 'intake-input-error' : undefined)
+
+  const setWithBmi =
+    (key) =>
+    (e) => {
+      const v = sanitizeFloatInput(e.target.value)
+      const next = { ...value, [key]: v }
+      next.bmi = calculateBmi(next.height, next.weight)
+      onChange(next)
+    }
+
+  const setHasSecondaryInsurance = (answer) => {
+    if (answer === 'no') {
+      onChange({
+        ...value,
+        hasSecondaryInsurance: 'no',
+        secondaryInsurance: '',
+        secondaryInsurancePhone: '',
+        secondaryInsuredName: '',
+        secondaryInsuredSs: '',
+        secondaryInsuredDob: '',
+        secondaryId: '',
+        secondaryGroup: '',
+      })
+      return
+    }
+    onChange({ ...value, hasSecondaryInsurance: 'yes' })
+  }
+
+  const setSurgeryAnswer = (questionKey, answer) => {
+    if (answer === 'no') {
+      onChange({ ...value, [questionKey]: 'no', ...clearSurgeryQuestionDetails(questionKey) })
+      return
+    }
+    onChange({ ...value, [questionKey]: 'yes' })
+  }
+
+  const surgeryDetails = (questionKey, idPrefix) => (
+    <div className="intake-surgery-details">
+      <div className="intake-grid-2">
+        <div className="intake-field">
+          <label htmlFor={`${idPrefix}-name`}>Surgeon&apos;s Name</label>
           <input
-            type="radio"
-            name={`intake-yn-${key}`}
-            checked={value[key] === 'yes'}
-            onChange={() => onChange({ ...value, [key]: 'yes' })}
+            id={`${idPrefix}-name`}
+            type="text"
+            value={value[`${questionKey}SurgeonName`]}
+            onChange={set(`${questionKey}SurgeonName`)}
           />
-          Yes
-        </label>
-        <label>
+        </div>
+        <div className="intake-field">
+          <label htmlFor={`${idPrefix}-date`}>Date / Year</label>
           <input
-            type="radio"
-            name={`intake-yn-${key}`}
-            checked={value[key] === 'no'}
-            onChange={() => onChange({ ...value, [key]: 'no' })}
+            id={`${idPrefix}-date`}
+            type="text"
+            value={value[`${questionKey}DateYear`]}
+            onChange={set(`${questionKey}DateYear`)}
           />
-          No
-        </label>
-      </span>
+        </div>
+      </div>
+      <div className="intake-grid-2">
+        <div className="intake-field">
+          <label htmlFor={`${idPrefix}-start`}>Start Wt</label>
+          <input
+            id={`${idPrefix}-start`}
+            type="text"
+            value={value[`${questionKey}StartWt`]}
+            onChange={set(`${questionKey}StartWt`)}
+          />
+        </div>
+        <div className="intake-field">
+          <label htmlFor={`${idPrefix}-end`}>End Wt</label>
+          <input
+            id={`${idPrefix}-end`}
+            type="text"
+            value={value[`${questionKey}EndWt`]}
+            onChange={set(`${questionKey}EndWt`)}
+          />
+        </div>
+      </div>
+      <div className="intake-field">
+        <label htmlFor={`${idPrefix}-comments`}>Comments</label>
+        <textarea
+          id={`${idPrefix}-comments`}
+          rows={3}
+          value={value[`${questionKey}Comments`]}
+          onChange={set(`${questionKey}Comments`)}
+        />
+      </div>
     </div>
   )
 
@@ -44,25 +112,47 @@ export default function IntakeForm({ value, onChange }) {
       <div className="intake-meta-row">
         <div className="intake-field">
           <label htmlFor="intake-intakeDate">Intake Date</label>
-          <input id="intake-intakeDate" type="date" value={value.intakeDate} onChange={set('intakeDate')} />
-        </div>
-        <div className="intake-field">
-          <label htmlFor="intake-referredBy">Referred By</label>
-          <input id="intake-referredBy" type="text" value={value.referredBy} onChange={set('referredBy')} autoComplete="off" />
-        </div>
-        <div className="intake-field">
-          <label htmlFor="intake-staffName">Staff Name</label>
-          <input id="intake-staffName" type="text" value={value.staffName} onChange={set('staffName')} autoComplete="off" />
+          <input
+            id="intake-intakeDate"
+            type="date"
+            className="intake-date-readonly"
+            value={value.intakeDate || getTodayIntakeDate()}
+            readOnly
+            aria-readonly="true"
+            tabIndex={-1}
+          />
         </div>
       </div>
 
       <div className="intake-field">
-        <label htmlFor="intake-patientName">Name</label>
-        <input id="intake-patientName" type="text" value={value.patientName} onChange={set('patientName')} autoComplete="name" />
+        <label htmlFor="intake-patientName">
+          Name <span className="intake-required">*</span>
+        </label>
+        <input
+          id="intake-patientName"
+          type="text"
+          className={inputClass('patientName')}
+          value={value.patientName}
+          onChange={set('patientName')}
+          autoComplete="name"
+          required
+          aria-invalid={err('patientName') ? 'true' : undefined}
+        />
       </div>
       <div className="intake-field">
-        <label htmlFor="intake-address1">Address</label>
-        <input id="intake-address1" type="text" value={value.addressLine1} onChange={set('addressLine1')} autoComplete="street-address" />
+        <label htmlFor="intake-address1">
+          Address <span className="intake-required">*</span>
+        </label>
+        <input
+          id="intake-address1"
+          type="text"
+          className={inputClass('addressLine1')}
+          value={value.addressLine1}
+          onChange={set('addressLine1')}
+          autoComplete="street-address"
+          required
+          aria-invalid={err('addressLine1') ? 'true' : undefined}
+        />
       </div>
       <div className="intake-field">
         <label htmlFor="intake-address2">Address (line 2)</label>
@@ -71,8 +161,19 @@ export default function IntakeForm({ value, onChange }) {
 
       <div className="intake-grid-2">
         <div className="intake-field">
-          <label htmlFor="intake-phone">Phone #</label>
-          <input id="intake-phone" type="tel" value={value.patientPhone} onChange={set('patientPhone')} autoComplete="tel" />
+          <label htmlFor="intake-phone">
+            Phone # <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-phone"
+            type="tel"
+            className={inputClass('patientPhone')}
+            value={value.patientPhone}
+            onChange={set('patientPhone')}
+            autoComplete="tel"
+            required
+            aria-invalid={err('patientPhone') ? 'true' : undefined}
+          />
         </div>
         <div className="intake-field">
           <label htmlFor="intake-email">Email Address</label>
@@ -82,8 +183,10 @@ export default function IntakeForm({ value, onChange }) {
 
       <div className="intake-grid-2">
         <div className="intake-field">
-          <span className="intake-label">Gender</span>
-          <div className="intake-radio-row">
+          <span className="intake-label">
+            Gender <span className="intake-required">*</span>
+          </span>
+          <div className={`intake-radio-row${err('gender') ? ' intake-input-error' : ''}`} role="radiogroup" aria-invalid={err('gender') ? 'true' : undefined}>
             <label>
               <input type="radio" name="intake-gender" checked={value.gender === 'male'} onChange={() => onChange({ ...value, gender: 'male' })} />
               Male
@@ -92,30 +195,83 @@ export default function IntakeForm({ value, onChange }) {
               <input type="radio" name="intake-gender" checked={value.gender === 'female'} onChange={() => onChange({ ...value, gender: 'female' })} />
               Female
             </label>
+            <label>
+              <input
+                type="radio"
+                name="intake-gender"
+                checked={value.gender === 'other'}
+                onChange={() => onChange({ ...value, gender: 'other' })}
+              />
+              Other
+            </label>
           </div>
         </div>
         <div className="intake-field">
-          <label htmlFor="intake-patientDob">DOB (Date of Birth)</label>
-          <input id="intake-patientDob" type="date" value={value.patientDob} onChange={set('patientDob')} />
+          <label htmlFor="intake-patientDob">
+            DOB (Date of Birth) <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-patientDob"
+            type="date"
+            className={inputClass('patientDob')}
+            value={value.patientDob}
+            onChange={set('patientDob')}
+            required
+            aria-invalid={err('patientDob') ? 'true' : undefined}
+          />
         </div>
       </div>
 
       <div className="intake-field">
-        <label htmlFor="intake-ss">SS#</label>
-        <input id="intake-ss" type="text" value={value.patientSs} onChange={set('patientSs')} autoComplete="off" inputMode="numeric" />
+        <label htmlFor="intake-ss">
+          SSN <span className="intake-required">*</span>
+        </label>
+        <input
+          id="intake-ss"
+          type="text"
+          className={inputClass('patientSs')}
+          value={value.patientSs}
+          onChange={set('patientSs')}
+          autoComplete="off"
+          inputMode="numeric"
+          required
+          aria-invalid={err('patientSs') ? 'true' : undefined}
+        />
       </div>
       <div className="intake-grid-3">
         <div className="intake-field">
           <label htmlFor="intake-ht">HT (Height)</label>
-          <input id="intake-ht" type="text" value={value.height} onChange={set('height')} placeholder='e.g. 5&apos;8"' />
+          <input
+            id="intake-ht"
+            type="text"
+            inputMode="decimal"
+            value={value.height}
+            onChange={setWithBmi('height')}
+            placeholder="inches"
+          />
         </div>
         <div className="intake-field">
           <label htmlFor="intake-wt">WT (Weight)</label>
-          <input id="intake-wt" type="text" value={value.weight} onChange={set('weight')} placeholder="lbs" />
+          <input
+            id="intake-wt"
+            type="text"
+            inputMode="decimal"
+            value={value.weight}
+            onChange={setWithBmi('weight')}
+            placeholder="lbs"
+          />
         </div>
         <div className="intake-field">
           <label htmlFor="intake-bmi">BMI</label>
-          <input id="intake-bmi" type="text" value={value.bmi} onChange={set('bmi')} />
+          <input
+            id="intake-bmi"
+            type="text"
+            className="intake-date-readonly"
+            value={value.bmi}
+            readOnly
+            aria-readonly="true"
+            tabIndex={-1}
+          />
         </div>
       </div>
 
@@ -143,7 +299,7 @@ export default function IntakeForm({ value, onChange }) {
           <input id="intake-pri-insured" type="text" value={value.primaryInsuredName} onChange={set('primaryInsuredName')} />
         </div>
         <div className="intake-field">
-          <label htmlFor="intake-pri-ss">SS#</label>
+          <label htmlFor="intake-pri-ss">SSN</label>
           <input id="intake-pri-ss" type="text" value={value.primaryInsuredSs} onChange={set('primaryInsuredSs')} />
         </div>
       </div>
@@ -162,41 +318,143 @@ export default function IntakeForm({ value, onChange }) {
         </div>
       </div>
 
+      <div className="intake-field">
+        <span className="intake-label">
+          Do you have secondary insurance? <span className="intake-required">*</span>
+        </span>
+        <div
+          className={`intake-radio-row${err('hasSecondaryInsurance') ? ' intake-input-error' : ''}`}
+          role="radiogroup"
+          aria-invalid={err('hasSecondaryInsurance') ? 'true' : undefined}
+        >
+          <label>
+            <input
+              type="radio"
+              name="intake-hasSecondaryInsurance"
+              checked={value.hasSecondaryInsurance === 'yes'}
+              onChange={() => setHasSecondaryInsurance('yes')}
+            />
+            Yes
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="intake-hasSecondaryInsurance"
+              checked={value.hasSecondaryInsurance === 'no'}
+              onChange={() => setHasSecondaryInsurance('no')}
+            />
+            No
+          </label>
+        </div>
+        <p className="intake-field-hint">
+          If you answer <strong>Yes</strong>, you must provide complete Secondary Insurance information below. All fields in that
+          section are required.
+        </p>
+      </div>
+
+      {value.hasSecondaryInsurance === 'yes' ? (
+        <>
       <h3 className="intake-section-title">Secondary Insurance</h3>
+      <p className="intake-field-hint intake-field-hint--active">Required — please complete every field in this section.</p>
       <div className="intake-grid-2">
         <div className="intake-field">
-          <label htmlFor="intake-sec-ins">Secondary Insurance</label>
-          <input id="intake-sec-ins" type="text" value={value.secondaryInsurance} onChange={set('secondaryInsurance')} />
+          <label htmlFor="intake-sec-ins">
+            Secondary Insurance <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-ins"
+            type="text"
+            className={inputClass('secondaryInsurance')}
+            value={value.secondaryInsurance}
+            onChange={set('secondaryInsurance')}
+            aria-invalid={err('secondaryInsurance') ? 'true' : undefined}
+          />
         </div>
         <div className="intake-field">
-          <label htmlFor="intake-sec-phone">Phone #</label>
-          <input id="intake-sec-phone" type="tel" value={value.secondaryInsurancePhone} onChange={set('secondaryInsurancePhone')} />
+          <label htmlFor="intake-sec-phone">
+            Phone # <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-phone"
+            type="tel"
+            className={inputClass('secondaryInsurancePhone')}
+            value={value.secondaryInsurancePhone}
+            onChange={set('secondaryInsurancePhone')}
+            aria-invalid={err('secondaryInsurancePhone') ? 'true' : undefined}
+          />
         </div>
       </div>
       <div className="intake-grid-2">
         <div className="intake-field">
-          <label htmlFor="intake-sec-insured">Insured (Name)</label>
-          <input id="intake-sec-insured" type="text" value={value.secondaryInsuredName} onChange={set('secondaryInsuredName')} />
+          <label htmlFor="intake-sec-insured">
+            Insured (Name) <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-insured"
+            type="text"
+            className={inputClass('secondaryInsuredName')}
+            value={value.secondaryInsuredName}
+            onChange={set('secondaryInsuredName')}
+            aria-invalid={err('secondaryInsuredName') ? 'true' : undefined}
+          />
         </div>
         <div className="intake-field">
-          <label htmlFor="intake-sec-ss">SS#</label>
-          <input id="intake-sec-ss" type="text" value={value.secondaryInsuredSs} onChange={set('secondaryInsuredSs')} />
+          <label htmlFor="intake-sec-ss">
+            SSN <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-ss"
+            type="text"
+            className={inputClass('secondaryInsuredSs')}
+            value={value.secondaryInsuredSs}
+            onChange={set('secondaryInsuredSs')}
+            aria-invalid={err('secondaryInsuredSs') ? 'true' : undefined}
+          />
         </div>
       </div>
       <div className="intake-field" style={{ maxWidth: 320 }}>
-        <label htmlFor="intake-sec-dob">DOB</label>
-        <input id="intake-sec-dob" type="date" value={value.secondaryInsuredDob} onChange={set('secondaryInsuredDob')} />
+        <label htmlFor="intake-sec-dob">
+          DOB <span className="intake-required">*</span>
+        </label>
+        <input
+          id="intake-sec-dob"
+          type="date"
+          className={inputClass('secondaryInsuredDob')}
+          value={value.secondaryInsuredDob}
+          onChange={set('secondaryInsuredDob')}
+          aria-invalid={err('secondaryInsuredDob') ? 'true' : undefined}
+        />
       </div>
       <div className="intake-grid-2">
         <div className="intake-field">
-          <label htmlFor="intake-sec-id">ID#</label>
-          <input id="intake-sec-id" type="text" value={value.secondaryId} onChange={set('secondaryId')} />
+          <label htmlFor="intake-sec-id">
+            ID# <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-id"
+            type="text"
+            className={inputClass('secondaryId')}
+            value={value.secondaryId}
+            onChange={set('secondaryId')}
+            aria-invalid={err('secondaryId') ? 'true' : undefined}
+          />
         </div>
         <div className="intake-field">
-          <label htmlFor="intake-sec-grp">Group#</label>
-          <input id="intake-sec-grp" type="text" value={value.secondaryGroup} onChange={set('secondaryGroup')} />
+          <label htmlFor="intake-sec-grp">
+            Group# <span className="intake-required">*</span>
+          </label>
+          <input
+            id="intake-sec-grp"
+            type="text"
+            className={inputClass('secondaryGroup')}
+            value={value.secondaryGroup}
+            onChange={set('secondaryGroup')}
+            aria-invalid={err('secondaryGroup') ? 'true' : undefined}
+          />
         </div>
       </div>
+        </>
+      ) : null}
 
       <h3 className="intake-section-title">Medical History &amp; Comorbidities</h3>
       <div className="intake-field">
@@ -244,36 +502,35 @@ export default function IntakeForm({ value, onChange }) {
 
       <h3 className="intake-section-title">Surgery History</h3>
       <div className="intake-surgery-box">
-        <div className="intake-surgery-yn">
-          {yn('Have you had Previous Surgery?', 'prevSurgery')}
-          {yn('Are you interested in a Revision?', 'interestedRevision')}
-          {yn('Are you interested in Skin Removal?', 'interestedSkinRemoval')}
-          {yn('Do you need a Hernia repair?', 'needHerniaRepair')}
-        </div>
-        <div className="intake-label">If any above is Yes — detail (surgeon, dates, weights, comments)</div>
-        <div className="intake-grid-2">
-          <div className="intake-field">
-            <label htmlFor="intake-surg-name">Surgeon&apos;s Name</label>
-            <input id="intake-surg-name" type="text" value={value.surgerySurgeonName} onChange={set('surgerySurgeonName')} />
-          </div>
-          <div className="intake-field">
-            <label htmlFor="intake-surg-date">Date / Year</label>
-            <input id="intake-surg-date" type="text" value={value.surgeryDateYear} onChange={set('surgeryDateYear')} />
-          </div>
-        </div>
-        <div className="intake-grid-2">
-          <div className="intake-field">
-            <label htmlFor="intake-surg-start">Start Wt</label>
-            <input id="intake-surg-start" type="text" value={value.surgeryStartWt} onChange={set('surgeryStartWt')} />
-          </div>
-          <div className="intake-field">
-            <label htmlFor="intake-surg-end">End Wt</label>
-            <input id="intake-surg-end" type="text" value={value.surgeryEndWt} onChange={set('surgeryEndWt')} />
-          </div>
-        </div>
-        <div className="intake-field">
-          <label htmlFor="intake-surg-comments">Comments</label>
-          <textarea id="intake-surg-comments" rows={4} value={value.surgeryComments} onChange={set('surgeryComments')} />
+        <div className="intake-surgery-stack">
+          {SURGERY_HISTORY_QUESTIONS.map(({ key, label, hasDetails }) => (
+            <div key={key} className="intake-surgery-question">
+              <div className="intake-surgery-question-head">
+                <span className="intake-surgery-question-label">{label}</span>
+                <div className="intake-radio-row">
+                  <label>
+                    <input
+                      type="radio"
+                      name={`intake-yn-${key}`}
+                      checked={value[key] === 'yes'}
+                      onChange={() => setSurgeryAnswer(key, 'yes')}
+                    />
+                    Yes
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name={`intake-yn-${key}`}
+                      checked={value[key] === 'no'}
+                      onChange={() => setSurgeryAnswer(key, 'no')}
+                    />
+                    No
+                  </label>
+                </div>
+              </div>
+              {hasDetails && value[key] === 'yes' ? surgeryDetails(key, `intake-surg-${key}`) : null}
+            </div>
+          ))}
         </div>
       </div>
 
