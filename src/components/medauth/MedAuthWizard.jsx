@@ -7,24 +7,20 @@ import {
   mergeParsedData,
   getOcrQualityLabel,
 } from '../../ocrHelpers.js'
-import { createEmptyScriptAnswers } from '../../medauthForm.js'
-import {
-  buildVerificationReport,
-} from '../../services/verificationSubmit.js'
 import { buildIntakePdf } from '../../services/intakePdf.js'
 import { submitIntakePdfEmail } from '../../services/intakePdfSubmit.js'
-import { buildWorksheetPdf } from '../../services/worksheetPdf.js'
-import { submitWorksheetPdfEmail } from '../../services/worksheetPdfSubmit.js'
+import { buildVerificationAnswersPdf } from '../../services/verificationAnswersPdf.js'
+import { submitVerificationAnswersEmail } from '../../services/verificationAnswersSubmit.js'
 import { FRONT_OCR_CLEAR_KEYS, BACK_OCR_CLEAR_KEYS } from './clinicaFormFields.js'
 import { ClinicaResultCard } from './ClinicaResultCard.jsx'
 import IntakeForm from './IntakeForm.jsx'
 import { createEmptyIntakeForm, validateIntakeRequired } from './intakeFormModel.js'
-import CallScriptForm from './CallScriptForm.jsx'
-import { createEmptyCallScriptForm } from './callScriptFormModel.js'
+import InsuranceVerificationFlow from './InsuranceVerificationFlow.jsx'
+import { createEmptyVerificationAnswers, getFirstUnansweredVerificationIndex, VERIFICATION_QUESTIONS } from './verificationQuestionsModel.js'
 
 const STEP_LABELS = [
   { label: 'Patient data & insurance card', pct: 33 },
-  { label: 'Verification worksheet', pct: 66 },
+  { label: 'Insurance verification', pct: 66 },
   { label: 'Final result', pct: 100 },
 ]
 
@@ -110,13 +106,9 @@ export default function MedAuthWizard() {
   const [formError, setFormError] = useState('')
   const [intakeFieldErrors, setIntakeFieldErrors] = useState(() => ({}))
   const [continuing, setContinuing] = useState(false)
-  const [continuePhase, setContinuePhase] = useState('')
   const [continueError, setContinueError] = useState('')
-  const [scriptAnswers] = useState(() => createEmptyScriptAnswers())
-  const [callForm, setCallForm] = useState(() => createEmptyCallScriptForm())
+  const [verificationAnswers, setVerificationAnswers] = useState(() => createEmptyVerificationAnswers())
   const [submitting, setSubmitting] = useState(false)
-  const [statusSending, setStatusSending] = useState(false)
-  const [statusSuccess, setStatusSuccess] = useState(false)
   const [statusError, setStatusError] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [resultData, setResultData] = useState(null)
@@ -125,31 +117,7 @@ export default function MedAuthWizard() {
 
   const frontCamRef = useRef(null)
   const backCamRef = useRef(null)
-  const callStepPrefillRef = useRef(0)
   const lastScrollYRef = useRef(0)
-
-  useEffect(() => {
-    if (step !== 2) {
-      callStepPrefillRef.current = 0
-      return
-    }
-    if (callStepPrefillRef.current === 2) return
-    callStepPrefillRef.current = 2
-    setCallForm((prev) => ({
-      ...prev,
-      patientName: prev.patientName || intakeData.patientName || '',
-      insured: prev.insured || intakeData.primaryInsuredName || '',
-      insuranceName:
-        prev.insuranceName || extractedData.insuranceCompany || intakeData.primaryInsurance || '',
-      insurancePhone:
-        prev.insurancePhone ||
-        extractedData.phoneCustomerService ||
-        intakeData.primaryInsurancePhone ||
-        '',
-      insuranceId: prev.insuranceId || extractedData.memberId || '',
-      groupNumber: prev.groupNumber || extractedData.groupNumber || '',
-    }))
-  }, [step, intakeData, extractedData])
 
   useEffect(() => {
     setHeaderHidden(false)
@@ -191,11 +159,8 @@ export default function MedAuthWizard() {
     setFormError('')
     setIntakeFieldErrors({})
     setContinuing(false)
-    setContinuePhase('')
     setContinueError('')
-    setCallForm(createEmptyCallScriptForm())
-    setStatusSending(false)
-    setStatusSuccess(false)
+    setVerificationAnswers(createEmptyVerificationAnswers())
     setStatusError(false)
     setResultData(null)
     setOcrFrontFill(0)
@@ -358,14 +323,12 @@ export default function MedAuthWizard() {
 
     setContinuing(true)
     try {
-      setContinuePhase('Generating PDF…')
       const { base64, filename } = await buildIntakePdf({
         intakeForm: intakeData,
         extractedData,
         b64Front,
         b64Back,
       })
-      setContinuePhase('Sending email…')
       await submitIntakePdfEmail({
         pdfBase64: base64,
         filename,
@@ -377,58 +340,42 @@ export default function MedAuthWizard() {
       setContinueError(`Error: ${err?.message || 'Could not send intake PDF. Please try again.'}`)
     } finally {
       setContinuing(false)
-      setContinuePhase('')
     }
   }
 
-  const submitForm = async () => {
+  const submitVerification = async () => {
+    if (getFirstUnansweredVerificationIndex(verificationAnswers) < VERIFICATION_QUESTIONS.length) {
+      setErrorMsg('Please answer every verification question before sending.')
+      setStatusError(true)
+      return
+    }
+
     setStatusError(false)
-    setStatusSuccess(false)
     setSubmitting(true)
-    setStatusSending(true)
     try {
-      const script = {
-        ...scriptAnswers,
-        cobertura: '',
-        autorizacion: '',
-        referencia: '',
-        facilidad: '',
-        facilidadDetalle: '',
-        deducibleTotal: '',
-        deducibleMet: '',
-        copago: '',
-        oopMax: '',
-        notasRep: '',
-        repName: callForm.spokeWith.trim(),
-        refNum: callForm.callRefNumber.trim(),
-      }
-      const { base64, filename } = await buildWorksheetPdf({ callForm })
-      await submitWorksheetPdfEmail({
+      const { base64, filename } = await buildVerificationAnswersPdf({
+        answers: verificationAnswers,
+        intakeForm: intakeData,
+      })
+      await submitVerificationAnswersEmail({
         pdfBase64: base64,
         filename,
-        callForm,
+        answers: verificationAnswers,
+        intakeForm: intakeData,
       })
 
-      const reportBase = buildVerificationReport(extractedData, script, intakeData, callForm)
-      const full = {
-        ...reportBase,
-        expedienteId: crypto.randomUUID(),
+      setResultData({
+        nombre: intakeData.patientName || 'Patient',
+        verificationAnswersSent: true,
         b64Front,
         b64Back,
-        worksheetPdfSent: true,
-      }
-      setStatusSending(false)
-      setStatusSuccess(true)
-      setTimeout(() => {
-        setResultData(full)
-        setStep(3)
-        setStatusSuccess(false)
-      }, 1500)
+        expedienteId: crypto.randomUUID(),
+      })
+      setStep(3)
     } catch (err) {
       console.error(err)
-      setStatusSending(false)
       setStatusError(true)
-      setErrorMsg(`Error: ${err?.message || 'Please try again.'}`)
+      setErrorMsg(`Error: ${err?.message || 'Could not send verification answers. Please try again.'}`)
     } finally {
       setSubmitting(false)
     }
@@ -483,7 +430,7 @@ export default function MedAuthWizard() {
                 <div className="step-dot-circle">
                   <Icon name="call" />
                 </div>
-                <span className="step-dot-label">Worksheet</span>
+                <span className="step-dot-label">Verification</span>
               </div>
               <div className={`step-dot ${step === 3 ? 'active' : ''}`} id="dot-3">
                 <div className="step-dot-circle">3</div>
@@ -573,7 +520,7 @@ export default function MedAuthWizard() {
                   id="ocrFrontPanel"
                 >
                   <div className="ocr-side-header">
-                    <div className="ocr-spinner" />
+                    {ocrFrontFill < 100 ? <div className="ocr-spinner" /> : null}
                     <span className="ocr-side-label" id="ocrFrontLabel">
                       <OcrSideLabelContent
                         visible={ocrFrontVisible}
@@ -634,7 +581,7 @@ export default function MedAuthWizard() {
                   id="ocrBackPanel"
                 >
                   <div className="ocr-side-header">
-                    <div className="ocr-spinner" />
+                    {ocrBackFill < 100 ? <div className="ocr-spinner" /> : null}
                     <span className="ocr-side-label" id="ocrBackLabel">
                       <OcrSideLabelContent
                         visible={ocrBackVisible}
@@ -711,48 +658,32 @@ export default function MedAuthWizard() {
                       : undefined
                 }
               >
-                {continuing ? continuePhase || 'Processing…' : 'Continue to worksheet'} {!continuing ? <Icon name="assignment" /> : null}
+                {continuing ? (
+                  <>
+                    <span className="btn-inline-spinner" aria-hidden="true" />
+                    Sending the information…
+                  </>
+                ) : (
+                  <>
+                    Continue to verification <Icon name="assignment" />
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
 
-        {/* STEP 2 — verification worksheet */}
+        {/* STEP 2 — insurance verification (one question per view) */}
         <div className={`form-section ${step === 2 ? 'active' : ''}`} id="step-2">
           <div className="section-card">
-            <CallScriptForm value={callForm} onChange={setCallForm} />
+            <InsuranceVerificationFlow
+              answers={verificationAnswers}
+              onChange={setVerificationAnswers}
+              onSubmit={submitVerification}
+              submitting={submitting}
+              onBackToIntake={() => setStep(1)}
+            />
 
-            <div
-              id="statusSending"
-              style={{
-                display: statusSending ? 'block' : 'none',
-                textAlign: 'center',
-                padding: 18,
-                background: 'var(--tint-link-10)',
-                border: '1px solid var(--tint-link-25)',
-                borderRadius: 12,
-                marginBottom: 14,
-              }}
-            >
-              <div className="ocr-spinner" style={{ margin: '0 auto 10px' }} />
-              <span style={{ fontSize: 14, color: 'var(--primary-light)' }}>Processing...</span>
-            </div>
-            <div
-              id="statusSuccess"
-              style={{
-                display: statusSuccess ? 'block' : 'none',
-                textAlign: 'center',
-                padding: 16,
-                background: 'rgba(16,185,129,0.08)',
-                border: '1px solid rgba(16,185,129,0.25)',
-                borderRadius: 12,
-                marginBottom: 14,
-              }}
-            >
-              <p style={{ fontSize: 14, color: 'var(--apto)', margin: 0 }}>
-                <Icon name="check_circle" /> Worksheet PDF sent!
-              </p>
-            </div>
             <div
               id="statusError"
               style={{
@@ -761,21 +692,12 @@ export default function MedAuthWizard() {
                 background: 'rgba(239,68,68,0.08)',
                 border: '1px solid rgba(239,68,68,0.25)',
                 borderRadius: 12,
-                marginBottom: 14,
+                marginTop: 14,
               }}
             >
               <p style={{ fontSize: 13, color: 'var(--no-apto)', margin: 0 }} id="errorMsg">
-                {errorMsg}
+                <Icon name="warning" /> {errorMsg}
               </p>
-            </div>
-
-            <div className="nav-buttons">
-              <button type="button" className="btn btn-secondary" onClick={() => setStep(1)}>
-                ← Back
-              </button>
-              <button type="button" className="btn btn-primary" id="btnSubmit" disabled={submitting} onClick={submitForm}>
-                <Icon name="send" /> Evaluate &amp; Send Report
-              </button>
             </div>
           </div>
         </div>

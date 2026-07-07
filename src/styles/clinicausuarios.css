@@ -832,6 +832,15 @@ body::after {
   transform: translateY(-2px);
   box-shadow: 0 8px 30px var(--tint-accent-45);
 }
+.btn-inline-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
 .btn-secondary {
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -41,7 +41,7 @@ export function calculateBmi(heightRaw, weightRaw) {
   const heightInches = parseHeightToInches(heightRaw)
   const weightLbs = parseWeightLbs(weightRaw)
   if (!heightInches || !weightLbs) return ''
-  const bmi = (weightLbs * 705) / (heightInches * heightInches)
+  const bmi = (weightLbs * 705) / (heightInches)
   return String(Math.round(bmi * 10) / 10)
 }
 

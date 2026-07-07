@@ -31,6 +31,12 @@ export function ClinicaResultCard({ data, onReset }) {
       auth.includes('Not required') ||
       auth.includes('No Requerida'))
   const worksheetMode = Boolean(data.worksheetPdfSent)
+  const verificationMode = Boolean(data.verificationAnswersSent)
+  const emailLabel = verificationMode
+    ? 'Verification answers sent'
+    : worksheetMode
+      ? 'Worksheet PDF sent'
+      : 'Report sent'
 
   return (
     <div className="section-card result-card result-apto">
@@ -38,11 +44,10 @@ export function ClinicaResultCard({ data, onReset }) {
         <span className="material-symbols-outlined">mark_email_read</span>
       </div>
       <div className="result-badge">
-        <span className="material-symbols-outlined">check_circle</span>{' '}
-        {worksheetMode ? 'Worksheet PDF sent' : 'Report sent'}
+        <span className="material-symbols-outlined">check_circle</span> {emailLabel}
       </div>
       <p className="result-message">
-        {worksheetMode ? 'Worksheet PDF for ' : 'Verification report for '}
+        {verificationMode ? 'Insurance verification answers for ' : worksheetMode ? 'Worksheet PDF for ' : 'Verification report for '}
         <strong>{data.nombre || 'Patient'}</strong> was emailed to <strong>{getReportDestEmail()}</strong>.
       </p>
 
